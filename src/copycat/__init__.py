@@ -17,11 +17,12 @@ from .model import (
     parse_model_answer,
 )
 from .module import load_module, save_module
-from .object import Abs, Cat, Model, Number, Object, Span, String, Word
+from .object import Abs, Annotation, Cat, Model, Number, Object, Span, String, Word
 from .read import read
 
 __all__ = [
     "Abs",
+    "Annotation",
     "Cat",
     "CopycatError",
     "EvaluationError",

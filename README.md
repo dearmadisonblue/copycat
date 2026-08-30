@@ -40,9 +40,18 @@ dictionary = {
 assert run("1 duplicate", dictionary=dictionary, verbose=False) == "1 1"
 ```
 
+Annotations use `@name` syntax and have identity semantics. The built-in `@eq`
+annotation asserts that the top two values are deeply equal without removing
+them from the stack.
+
+```python
+assert run("1 1 @eq", strict=True, verbose=False) == "1 1"
+```
+
 Dictionaries can be serialized as `.module` ZIP archives. Each archive member is
 an extensionless UTF-8 text file whose filename is the word name and whose
-contents are its Copycat source body.
+contents are its Copycat source body. Every `test-*` word is run automatically
+when a module is loaded; a failed assertion prevents the module from loading.
 
 ```python
 from copycat import load_module, save_module
@@ -51,5 +60,13 @@ save_module(dictionary, "example.module")
 dictionary = load_module("example.module")
 ```
 
-See [`notebooks/copycat.ipynb`](notebooks/copycat.ipynb) for reader,
-evaluator, dictionary, model-effect, and live Gemma examples.
+The repository includes `modules/data.module`, a smoke-tested dictionary of
+products, sums, options, booleans, and Scott-encoded lists. In Colab or another
+remote environment it can be fetched directly from:
+
+```text
+https://raw.githubusercontent.com/dearmadisonblue/copycat/main/modules/data.module
+```
+
+See [`notebooks/copycat.ipynb`](notebooks/copycat.ipynb) for reader, evaluator,
+dictionary, module, model-effect, and live Gemma examples.

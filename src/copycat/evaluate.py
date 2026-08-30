@@ -11,7 +11,7 @@ from .error import (
 )
 from .model import ModelBackend, ModelError, parse_model_answer
 from .module import _validate_dictionary
-from .object import Abs, Cat, Model, Number, Object, String, Word
+from .object import Abs, Annotation, Cat, Model, Number, Object, String, Word
 from .read import read
 
 
@@ -352,6 +352,20 @@ def evaluate(
                         f"Undefined word {name!r}.",
                         stop=True,
                     )
+
+            case Annotation(name):
+                if name == "eq":
+                    if len(state.data) < 2:
+                        raise EvaluationError(
+                            "@eq needs 2 values on the data stack.",
+                            term,
+                        )
+                    left, right = state.data[-2:]
+                    if left != right:
+                        raise EvaluationError(
+                            f"@eq assertion failed: {left} != {right}.",
+                            term,
+                        )
 
             case Abs(_) | Number(_) | String(_):
                 state.data.append(term)

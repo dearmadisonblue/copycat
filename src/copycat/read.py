@@ -7,13 +7,15 @@ from lark import Lark, Transformer
 from lark.exceptions import UnexpectedCharacters, UnexpectedInput, UnexpectedToken
 
 from .error import ParseError
-from .object import Abs, Cat, Model, Number, Span, String, Word
+from .object import Abs, Annotation, Cat, Model, Number, Span, String, Word
 
 
 # Single-letter names are reserved for the kernel primitives. User-defined words
-# are lowercase kebab-case and contain at least two characters.
+# are lowercase kebab-case and contain at least two characters. Annotation names
+# use the same lowercase kebab-case spelling but do not reserve single letters.
 _WORD_PATTERN = r"(?:[a-z](?=[a-z0-9-])[a-z0-9]*(?:-[a-z0-9]+)*|[abcdefrs])"
 _USER_WORD_RE = re.compile(r"[a-z](?=[a-z0-9-])[a-z0-9]*(?:-[a-z0-9]+)*\Z")
+_ANNOTATION_PATTERN = r"@[a-z][a-z0-9]*(?:-[a-z0-9]+)*"
 
 _GRAMMAR = rf"""
 start: term*
@@ -22,12 +24,14 @@ start: term*
      | MODEL           -> model
      | ESCAPED_STRING  -> string
      | NUMBER          -> number
+     | ANNOTATION      -> annotation
      | WORD            -> word
 
 quotation: "[" term* "]"
 
 MODEL.3: /\{{[^}}]*\}}/s
 NUMBER: /0|[1-9][0-9]*/
+ANNOTATION.2: /{_ANNOTATION_PATTERN}/
 WORD: /{_WORD_PATTERN}/
 
 %import common.ESCAPED_STRING
@@ -54,6 +58,10 @@ class _BuildAST(Transformer):
     def word(self, children):
         (token,) = children
         return Word(str(token), span=self._span(token))
+
+    def annotation(self, children):
+        (token,) = children
+        return Annotation(str(token)[1:], span=self._span(token))
 
     def number(self, children):
         (token,) = children
@@ -96,6 +104,7 @@ def _friendly_parse_error(
     )
 
     terminal_names = {
+        "ANNOTATION": "annotation @name",
         "ESCAPED_STRING": "string",
         "LSQB": "'['",
         "RSQB": "']'",
@@ -114,6 +123,8 @@ def _friendly_parse_error(
             message = "Unclosed model invocation. Add a matching '}'."
         elif char == '"':
             message = "Invalid or unterminated string literal."
+        elif char == "@":
+            message = "Invalid annotation. Use @ followed by a lowercase kebab-case name."
         elif char and char.isalpha() and char.islower():
             message = (
                 f"Unexpected word character {char!r}. Single-letter names are "

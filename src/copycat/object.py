@@ -52,6 +52,14 @@ class Word(Object):
 
 
 @dataclass(frozen=True)
+class Annotation(Object):
+    name: str
+
+    def __str__(self) -> str:
+        return f"@{self.name}"
+
+
+@dataclass(frozen=True)
 class Abs(Object):
     body: Object
 
