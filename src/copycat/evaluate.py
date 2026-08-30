@@ -1,0 +1,399 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Callable, Mapping, Optional, Sequence
+
+from .error import (
+    CopycatError,
+    EvaluationError,
+    GeneratedCodeError,
+    ModelReportedError,
+)
+from .model import ModelBackend, ModelError, parse_model_answer
+from .object import Abs, Cat, Model, Number, Object, String, Word
+from .read import read
+
+
+Primitive = Callable[["State"], None]
+
+
+@dataclass
+class State:
+    gas: int
+    code: list[Object]
+    data: list[Object]
+    sink: list[Object]
+    dictionary: Mapping[str, Object]
+    primitives: Mapping[str, Primitive]
+    model_backend: Optional[ModelBackend]
+    strict: bool
+    allow_nested_model_calls: bool
+    verbose: bool
+    hand: Optional[Object] = None
+    step: int = 0
+
+    @property
+    def value(self) -> Object:
+        return Cat(tuple(self.sink + self.data + list(reversed(self.code))))
+
+    @property
+    def is_active(self) -> bool:
+        return self.gas > 0 and bool(self.code)
+
+    def tick(self) -> Object:
+        self.gas -= 1
+        self.step += 1
+        self.hand = self.code.pop()
+        return self.hand
+
+    def trace(self, phase: str, term: Object) -> None:
+        if not self.verbose:
+            return
+
+        sink = str(Cat(tuple(self.sink))) or "(empty)"
+        data = str(Cat(tuple(self.data))) or "(empty)"
+        remaining = str(Cat(tuple(reversed(self.code)))) or "(empty)"
+        print(
+            f"\n[Copycat step {self.step} — {phase}] "
+            f"{type(term).__name__}: {term}"
+        )
+        print(f"  gas remaining: {self.gas}")
+        print(f"  sink: {sink}")
+        print(f"  data (bottom to top): {data}")
+        print(f"  remaining code: {remaining}")
+
+    def thunk(self) -> None:
+        self.sink.extend(self.data)
+        self.data = []
+        if self.hand is not None:
+            self.sink.append(self.hand)
+
+    def stop(self) -> None:
+        self.thunk()
+        self.gas = 0
+
+    def fail_or_thunk(self, message: str, *, stop: bool = False) -> None:
+        if self.verbose:
+            action = "error" if self.strict else ("stop" if stop else "residualize")
+            print(f"\n[Copycat {action}] {message}")
+
+        if self.strict:
+            raise EvaluationError(message, self.hand)
+
+        if stop:
+            self.stop()
+        else:
+            self.thunk()
+
+
+def stack_string(data: Sequence[Object]) -> str:
+    """Representation shown to the model, ordered bottom-to-top."""
+    return str(Cat(tuple(data)))
+
+
+def _contains_model(obj: Object) -> bool:
+    match obj:
+        case Model():
+            return True
+        case Abs(body):
+            return _contains_model(body)
+        case Cat(body):
+            return any(_contains_model(child) for child in body)
+        case _:
+            return False
+
+
+def op_copy(state: State) -> None:
+    if not state.data:
+        state.fail_or_thunk(
+            "Copy needs 1 value on the data stack, but the stack is empty."
+        )
+        return
+    state.data.append(state.data[-1])
+
+
+def op_drop(state: State) -> None:
+    if not state.data:
+        state.fail_or_thunk(
+            "Drop needs 1 value on the data stack, but the stack is empty."
+        )
+        return
+    state.data.pop()
+
+
+def op_swap(state: State) -> None:
+    if len(state.data) < 2:
+        state.fail_or_thunk(
+            f"Swap needs 2 values on the data stack, but found {len(state.data)}."
+        )
+        return
+    state.data[-2], state.data[-1] = state.data[-1], state.data[-2]
+
+
+def op_abs(state: State) -> None:
+    if not state.data:
+        state.fail_or_thunk(
+            "Abs needs 1 value on the data stack, but the stack is empty."
+        )
+        return
+    state.data[-1] = Abs(state.data[-1])
+
+
+def op_app(state: State) -> None:
+    if not state.data:
+        state.fail_or_thunk(
+            "App needs a quotation on top of the data stack.",
+            stop=True,
+        )
+        return
+
+    block = state.data[-1]
+
+    if not isinstance(block, Abs):
+        state.fail_or_thunk(
+            f"App expected a quotation on top of the stack, but found {block}.",
+            stop=True,
+        )
+        return
+
+    state.data.pop()
+    state.code.append(block.body)
+
+
+def _cat_objects(first: Object, second: Object) -> Cat:
+    first_items = first.body if isinstance(first, Cat) else (first,)
+    second_items = second.body if isinstance(second, Cat) else (second,)
+    return Cat(tuple(first_items) + tuple(second_items))
+
+
+def op_cat(state: State) -> None:
+    if len(state.data) < 2:
+        state.fail_or_thunk(
+            f"Cat needs 2 quotations on the data stack, but found {len(state.data)}."
+        )
+        return
+
+    first, second = state.data[-2], state.data[-1]
+
+    if not isinstance(first, Abs) or not isinstance(second, Abs):
+        state.fail_or_thunk(
+            f"Cat expected two quotations, but found {first} and {second}."
+        )
+        return
+
+    state.data[-2:] = [Abs(_cat_objects(first.body, second.body))]
+
+
+def op_jump(state: State) -> None:
+    if not state.data:
+        state.fail_or_thunk(
+            "Jump needs a handler quotation on top of the data stack.",
+            stop=True,
+        )
+        return
+
+    handler = state.data[-1]
+
+    if not isinstance(handler, Abs):
+        state.fail_or_thunk(
+            f"Jump expected a handler quotation, but found {handler}.",
+            stop=True,
+        )
+        return
+
+    buffer: list[Object] = []
+    index = 1
+    mark_found = False
+
+    while index <= len(state.code):
+        point = state.code[-index]
+
+        if isinstance(point, Word) and point.name == "Mark":
+            mark_found = True
+            break
+
+        buffer.append(point)
+        index += 1
+
+    if not mark_found:
+        state.fail_or_thunk(
+            "Jump could not find a matching Mark in the continuation.",
+            stop=True,
+        )
+        return
+
+    continuation = Abs(Cat(tuple(buffer)))
+    state.code = state.code[:-index]
+    state.data.pop()
+    state.data.append(continuation)
+    state.code.append(handler.body)
+
+
+def op_mark(state: State) -> None:
+    state.thunk()
+
+
+def _run_model_effect(
+    state: State,
+    term: Model,
+    prompt: str,
+) -> None:
+    if state.model_backend is None:
+        raise EvaluationError(
+            "This program performs a model effect, "
+            "but no model backend was supplied.",
+            term,
+        )
+
+    visible_stack = stack_string(state.data)
+    if state.verbose:
+        print("\n=== Model effect ===")
+        print(f"Task: {prompt}")
+        print(f"Stack (bottom to top): {visible_stack or '(empty)'}")
+
+    turn = state.model_backend.generate(
+        prompt=prompt,
+        stack=visible_stack,
+    )
+
+    if state.verbose and turn.thinking and not turn.streamed:
+        print("\n--- Model thinking ---")
+        print(turn.thinking)
+
+    if state.verbose:
+        print("\n--- Model final answer ---")
+        print(turn.answer)
+
+    reply = parse_model_answer(turn.answer)
+
+    if isinstance(reply, ModelError):
+        raise ModelReportedError(prompt, reply.message)
+
+    if state.verbose:
+        print("\n--- Generated Copycat ---")
+        print(reply.code or "(empty program)")
+
+    try:
+        generated = read(reply.code, source_name="<model output>")
+    except CopycatError as exc:
+        raise GeneratedCodeError(
+            prompt,
+            reply.code,
+            exc,
+        ) from exc
+
+    if not state.allow_nested_model_calls and _contains_model(generated):
+        raise GeneratedCodeError(
+            prompt,
+            reply.code,
+            EvaluationError(
+                "Generated code contains another model invocation, "
+                "but nested model calls are disabled."
+            ),
+        )
+
+    state.code.append(generated)
+
+
+def evaluate(
+    program: Object,
+    dictionary: Optional[Mapping[str, Object]] = None,
+    *,
+    gas: int = 1_000_000,
+    model_backend: Optional[ModelBackend] = None,
+    strict: bool = False,
+    allow_nested_model_calls: bool = False,
+    verbose: bool = True,
+) -> Object:
+    primitives: dict[str, Primitive] = {
+        "Copy": op_copy,
+        "Drop": op_drop,
+        "Swap": op_swap,
+        "Abs": op_abs,
+        "App": op_app,
+        "Cat": op_cat,
+        "Jump": op_jump,
+        "Mark": op_mark,
+    }
+
+    state = State(
+        code=[program],
+        data=[],
+        sink=[],
+        gas=gas,
+        dictionary=dictionary or {},
+        primitives=primitives,
+        model_backend=model_backend,
+        strict=strict,
+        allow_nested_model_calls=allow_nested_model_calls,
+        verbose=verbose,
+    )
+
+    if verbose:
+        print("=== Copycat evaluation ===")
+        print(f"Program: {program or '(empty program)'}")
+        print(f"Initial gas: {gas}")
+
+    while state.is_active:
+        term = state.tick()
+        state.trace("before", term)
+
+        match term:
+            case Word(name):
+                if binding := state.primitives.get(name):
+                    binding(state)
+                elif binding := state.dictionary.get(name):
+                    state.code.append(binding)
+                else:
+                    state.fail_or_thunk(
+                        f"Undefined word {name!r}.",
+                        stop=True,
+                    )
+
+            case Abs(_) | Number(_) | String(_):
+                state.data.append(term)
+
+            case Cat(body):
+                state.code.extend(reversed(body))
+
+            case Model(prompt):
+                _run_model_effect(state, term, prompt)
+
+            case _:
+                raise EvaluationError(
+                    f"Unknown runtime object {term!r}.",
+                    term,
+                )
+
+        state.trace("after", term)
+
+    if state.gas <= 0 and state.code and state.strict:
+        raise EvaluationError(
+            "Evaluation ran out of gas before the program finished.",
+            state.hand,
+        )
+
+    if verbose:
+        print("\n=== Evaluation complete ===")
+        print(f"Result: {state.value or '(empty)'}")
+
+    return state.value
+
+
+def run(
+    source: str,
+    *,
+    model_backend: Optional[ModelBackend] = None,
+    strict: bool = False,
+    dictionary: Optional[Mapping[str, Object]] = None,
+    verbose: bool = True,
+) -> str:
+    return str(
+        evaluate(
+            read(source),
+            dictionary=dictionary,
+            model_backend=model_backend,
+            strict=strict,
+            verbose=verbose,
+        )
+    )

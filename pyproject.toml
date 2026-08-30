@@ -1,0 +1,32 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "copycat-language"
+version = "0.1.0"
+description = "A concatenative language with first-class model-driven program synthesis."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+dependencies = [
+    "lark>=1.2,<2",
+]
+
+[project.optional-dependencies]
+gemma = [
+    "accelerate",
+    "torch",
+    "transformers>=5.5.0",
+]
+test = [
+    "ipytest>=0.14",
+    "pytest>=8",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/copycat"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
