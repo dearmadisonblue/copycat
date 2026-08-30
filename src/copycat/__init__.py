@@ -16,7 +16,7 @@ from .model import (
     StubModel,
     parse_model_answer,
 )
-from .module import load_module, save_module
+from .module import Module, ModuleDocumentationWarning, load_module, save_module
 from .object import Abs, Annotation, Cat, Model, Number, Object, Span, String, Word
 from .read import read
 
@@ -35,6 +35,8 @@ __all__ = [
     "ModelProtocolError",
     "ModelReportedError",
     "ModelTurn",
+    "Module",
+    "ModuleDocumentationWarning",
     "Number",
     "Object",
     "ParseError",

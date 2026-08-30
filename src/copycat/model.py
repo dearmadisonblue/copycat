@@ -14,10 +14,17 @@ class ModelTurn:
     thinking: Optional[str] = None
     raw: Optional[str] = None
     streamed: bool = False
+    prompt_tokens: Optional[int] = None
 
 
 class ModelBackend(Protocol):
-    def generate(self, *, prompt: str, stack: str) -> ModelTurn:
+    def generate(
+        self,
+        *,
+        prompt: str,
+        stack: str,
+        module_catalog: str,
+    ) -> ModelTurn:
         ...
 
 
@@ -90,15 +97,21 @@ def parse_model_answer(answer: str) -> ModelOK | ModelError:
 class StubModel:
     """Deterministic backend for parser/evaluator tests and examples."""
 
-    def __init__(self, response: str | Callable[[str, str], str]):
+    def __init__(self, response: str | Callable[[str, str, str], str]):
         self.response = response
-        self.calls: list[tuple[str, str]] = []
+        self.calls: list[tuple[str, str, str]] = []
 
-    def generate(self, *, prompt: str, stack: str) -> ModelTurn:
-        self.calls.append((prompt, stack))
+    def generate(
+        self,
+        *,
+        prompt: str,
+        stack: str,
+        module_catalog: str,
+    ) -> ModelTurn:
+        self.calls.append((prompt, stack, module_catalog))
 
         if callable(self.response):
-            answer = self.response(prompt, stack)
+            answer = self.response(prompt, stack, module_catalog)
         else:
             answer = self.response
 
@@ -145,6 +158,12 @@ Quotations:
 
 Primitive words are single lowercase letters. User-defined words, when present,
 are lowercase kebab-case names longer than one character.
+
+MODULE WORDS
+An invocation may include a catalog of additional module words. Each entry gives
+the word name followed by documentation explaining how to use it. The word's
+implementation is deliberately hidden. Treat documented module words as available
+Copycat operations and rely on their descriptions and examples.
 
 PRIMITIVES
 a  apply
@@ -276,7 +295,13 @@ class Gemma4Backend:
             stream_output=stream_output,
         )
 
-    def generate(self, *, prompt: str, stack: str) -> ModelTurn:
+    def generate(
+        self,
+        *,
+        prompt: str,
+        stack: str,
+        module_catalog: str,
+    ) -> ModelTurn:
         import torch
         from transformers import TextStreamer
 
@@ -285,7 +310,11 @@ class Gemma4Backend:
         messages = [
             {
                 "role": "system",
-                "content": self.system_prompt,
+                "content": (
+                    f"{self.system_prompt}\n\n"
+                    "AVAILABLE MODULE WORDS\n"
+                    f"{module_catalog}"
+                ),
             },
             {
                 "role": "user",
@@ -360,6 +389,7 @@ class Gemma4Backend:
             thinking=thinking,
             raw=raw,
             streamed=self.stream_output,
+            prompt_tokens=input_len,
         )
         self.last_turn = turn
         return turn

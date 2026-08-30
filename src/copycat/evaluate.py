@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, Mapping, MutableMapping, Optional, Sequence
+from typing import Callable, Mapping, Optional, Sequence
 
 from .error import (
     CopycatError,
@@ -10,7 +10,7 @@ from .error import (
     ModelReportedError,
 )
 from .model import ModelBackend, ModelError, parse_model_answer
-from .module import _validate_dictionary
+from .module import EMPTY_MODULE, Module
 from .object import Abs, Annotation, Cat, Model, Number, Object, String, Word
 from .read import read
 
@@ -24,7 +24,7 @@ class State:
     code: list[Object]
     data: list[Object]
     sink: list[Object]
-    dictionary: MutableMapping[str, str]
+    module: Module
     primitives: Mapping[str, Primitive]
     model_backend: Optional[ModelBackend]
     strict: bool
@@ -249,7 +249,11 @@ def _run_model_effect(
     turn = state.model_backend.generate(
         prompt=prompt,
         stack=visible_stack,
+        module_catalog=state.module.model_catalog,
     )
+
+    if state.verbose and turn.prompt_tokens is not None:
+        print(f"Prompt tokens: {turn.prompt_tokens:,}")
 
     if state.verbose and turn.thinking and not turn.streamed:
         print("\n--- Model thinking ---")
@@ -292,7 +296,7 @@ def _run_model_effect(
 
 def evaluate(
     program: Object,
-    dictionary: Optional[MutableMapping[str, str]] = None,
+    module: Optional[Module] = None,
     *,
     gas: int = 1_000_000,
     model_backend: Optional[ModelBackend] = None,
@@ -311,15 +315,16 @@ def evaluate(
         "s": op_jump,
     }
 
-    active_dictionary = dictionary if dictionary is not None else {}
-    _validate_dictionary(active_dictionary)
+    active_module = module if module is not None else EMPTY_MODULE
+    if not isinstance(active_module, Module):
+        raise TypeError("evaluate expects module to be a Module instance.")
 
     state = State(
         code=[program],
         data=[],
         sink=[],
         gas=gas,
-        dictionary=active_dictionary,
+        module=active_module,
         primitives=primitives,
         model_backend=model_backend,
         strict=strict,
@@ -340,13 +345,8 @@ def evaluate(
             case Word(name):
                 if binding := state.primitives.get(name):
                     binding(state)
-                elif name in state.dictionary:
-                    state.code.append(
-                        read(
-                            state.dictionary[name],
-                            source_name=f"<word {name}>",
-                        )
-                    )
+                elif name in state.module:
+                    state.code.append(state.module.parsed(name))
                 else:
                     state.fail_or_thunk(
                         f"Undefined word {name!r}.",
@@ -402,13 +402,13 @@ def run(
     *,
     model_backend: Optional[ModelBackend] = None,
     strict: bool = False,
-    dictionary: Optional[MutableMapping[str, str]] = None,
+    module: Optional[Module] = None,
     verbose: bool = True,
 ) -> str:
     return str(
         evaluate(
             read(source),
-            dictionary=dictionary,
+            module=module,
             model_backend=model_backend,
             strict=strict,
             verbose=verbose,
