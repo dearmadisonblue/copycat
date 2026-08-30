@@ -140,37 +140,38 @@ Strings:
   "two words"
 
 Quotations:
-  [Copy]
-  [1 2 Swap]
+  [d]
+  [1 2 f]
 
-Words are separated by whitespace.
+Primitive words are single lowercase letters. User-defined words, when present,
+are lowercase kebab-case names longer than one character.
 
 PRIMITIVES
-Copy
-  Duplicate the top data-stack value.
-  Example: 1 Copy  ==>  1 1
-
-Drop
-  Remove the top data-stack value.
-  Example: 1 2 Drop  ==>  1
-
-Swap
-  Exchange the top two data-stack values.
-  Example: 1 2 Swap  ==>  2 1
-
-Abs
-  Wrap the top value in a quotation.
-  Example: 1 Abs  ==>  [1]
-
-App
+a  apply
   Remove the top quotation and execute its contents.
-  Example: 1 [Copy] App  ==>  1 1
+  Example: 1 [d] a  ==>  1 1
 
-Cat
+b  abstract
+  Wrap the top value in a quotation.
+  Example: 1 b  ==>  [1]
+
+c  catenate
   Concatenate the top two quotations.
-  Example: [1] [2] Cat  ==>  [1 2]
+  Example: [1] [2] c  ==>  [1 2]
 
-Jump / Mark
+d  copy
+  Duplicate the top data-stack value.
+  Example: 1 d  ==>  1 1
+
+e  drop
+  Remove the top data-stack value.
+  Example: 1 2 e  ==>  1
+
+f  swap
+  Exchange the top two data-stack values.
+  Example: 1 2 f  ==>  2 1
+
+r / s  reset / shift
   Delimited-control primitives. Do not use them unless the task actually
   requires continuation capture.
 
@@ -192,7 +193,7 @@ Task:
 swap the top two values
 
 Final answer:
-<OK>Swap</OK>
+<OK>f</OK>
 
 
 Current data stack:
@@ -202,7 +203,7 @@ Task:
 duplicate the top value
 
 Final answer:
-<OK>Copy</OK>
+<OK>d</OK>
 
 
 Current data stack:
@@ -222,7 +223,7 @@ Task:
 remove the value
 
 Final answer:
-<OK>Drop</OK>
+<OK>e</OK>
 """.strip()
 
 

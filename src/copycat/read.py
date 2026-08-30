@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 
 from lark import Lark, Transformer
 from lark.exceptions import UnexpectedCharacters, UnexpectedInput, UnexpectedToken
@@ -9,7 +10,12 @@ from .error import ParseError
 from .object import Abs, Cat, Model, Number, Span, String, Word
 
 
-_GRAMMAR = r"""
+# Single-letter names are reserved for the kernel primitives. User-defined words
+# are lowercase kebab-case and contain at least two characters.
+_WORD_PATTERN = r"(?:[a-z](?=[a-z0-9-])[a-z0-9]*(?:-[a-z0-9]+)*|[abcdefrs])"
+_USER_WORD_RE = re.compile(r"[a-z](?=[a-z0-9-])[a-z0-9]*(?:-[a-z0-9]+)*\Z")
+
+_GRAMMAR = rf"""
 start: term*
 
 ?term: quotation
@@ -20,9 +26,9 @@ start: term*
 
 quotation: "[" term* "]"
 
-MODEL.3: /\{[^}]*\}/s
+MODEL.3: /\{{[^}}]*\}}/s
 NUMBER: /0|[1-9][0-9]*/
-WORD: /[A-Za-z][A-Za-z0-9_]*/
+WORD: /{_WORD_PATTERN}/
 
 %import common.ESCAPED_STRING
 %import common.WS
@@ -30,6 +36,10 @@ WORD: /[A-Za-z][A-Za-z0-9_]*/
 """
 
 _PARSER = Lark(_GRAMMAR, parser="lalr", propagate_positions=True)
+
+
+def _is_user_word_name(name: str) -> bool:
+    return _USER_WORD_RE.fullmatch(name) is not None
 
 
 class _BuildAST(Transformer):
@@ -104,6 +114,11 @@ def _friendly_parse_error(
             message = "Unclosed model invocation. Add a matching '}'."
         elif char == '"':
             message = "Invalid or unterminated string literal."
+        elif char and char.isalpha() and char.islower():
+            message = (
+                f"Unexpected word character {char!r}. Single-letter names are "
+                "reserved for the primitives a-f, r, and s."
+            )
         else:
             shown = repr(char) if char else "end of input"
             message = f"Unexpected character {shown}."

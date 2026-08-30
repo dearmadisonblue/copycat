@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, Mapping, Optional, Sequence
+from typing import Callable, Mapping, MutableMapping, Optional, Sequence
 
 from .error import (
     CopycatError,
@@ -10,6 +10,7 @@ from .error import (
     ModelReportedError,
 )
 from .model import ModelBackend, ModelError, parse_model_answer
+from .module import _validate_dictionary
 from .object import Abs, Cat, Model, Number, Object, String, Word
 from .read import read
 
@@ -23,7 +24,7 @@ class State:
     code: list[Object]
     data: list[Object]
     sink: list[Object]
-    dictionary: Mapping[str, Object]
+    dictionary: MutableMapping[str, str]
     primitives: Mapping[str, Primitive]
     model_backend: Optional[ModelBackend]
     strict: bool
@@ -105,18 +106,14 @@ def _contains_model(obj: Object) -> bool:
 
 def op_copy(state: State) -> None:
     if not state.data:
-        state.fail_or_thunk(
-            "Copy needs 1 value on the data stack, but the stack is empty."
-        )
+        state.fail_or_thunk("d needs 1 value on the data stack, but the stack is empty.")
         return
     state.data.append(state.data[-1])
 
 
 def op_drop(state: State) -> None:
     if not state.data:
-        state.fail_or_thunk(
-            "Drop needs 1 value on the data stack, but the stack is empty."
-        )
+        state.fail_or_thunk("e needs 1 value on the data stack, but the stack is empty.")
         return
     state.data.pop()
 
@@ -124,7 +121,7 @@ def op_drop(state: State) -> None:
 def op_swap(state: State) -> None:
     if len(state.data) < 2:
         state.fail_or_thunk(
-            f"Swap needs 2 values on the data stack, but found {len(state.data)}."
+            f"f needs 2 values on the data stack, but found {len(state.data)}."
         )
         return
     state.data[-2], state.data[-1] = state.data[-1], state.data[-2]
@@ -132,9 +129,7 @@ def op_swap(state: State) -> None:
 
 def op_abs(state: State) -> None:
     if not state.data:
-        state.fail_or_thunk(
-            "Abs needs 1 value on the data stack, but the stack is empty."
-        )
+        state.fail_or_thunk("b needs 1 value on the data stack, but the stack is empty.")
         return
     state.data[-1] = Abs(state.data[-1])
 
@@ -142,7 +137,7 @@ def op_abs(state: State) -> None:
 def op_app(state: State) -> None:
     if not state.data:
         state.fail_or_thunk(
-            "App needs a quotation on top of the data stack.",
+            "a needs a quotation on top of the data stack.",
             stop=True,
         )
         return
@@ -151,7 +146,7 @@ def op_app(state: State) -> None:
 
     if not isinstance(block, Abs):
         state.fail_or_thunk(
-            f"App expected a quotation on top of the stack, but found {block}.",
+            f"a expected a quotation on top of the stack, but found {block}.",
             stop=True,
         )
         return
@@ -169,7 +164,7 @@ def _cat_objects(first: Object, second: Object) -> Cat:
 def op_cat(state: State) -> None:
     if len(state.data) < 2:
         state.fail_or_thunk(
-            f"Cat needs 2 quotations on the data stack, but found {len(state.data)}."
+            f"c needs 2 quotations on the data stack, but found {len(state.data)}."
         )
         return
 
@@ -177,7 +172,7 @@ def op_cat(state: State) -> None:
 
     if not isinstance(first, Abs) or not isinstance(second, Abs):
         state.fail_or_thunk(
-            f"Cat expected two quotations, but found {first} and {second}."
+            f"c expected two quotations, but found {first} and {second}."
         )
         return
 
@@ -187,7 +182,7 @@ def op_cat(state: State) -> None:
 def op_jump(state: State) -> None:
     if not state.data:
         state.fail_or_thunk(
-            "Jump needs a handler quotation on top of the data stack.",
+            "s needs a handler quotation on top of the data stack.",
             stop=True,
         )
         return
@@ -196,7 +191,7 @@ def op_jump(state: State) -> None:
 
     if not isinstance(handler, Abs):
         state.fail_or_thunk(
-            f"Jump expected a handler quotation, but found {handler}.",
+            f"s expected a handler quotation, but found {handler}.",
             stop=True,
         )
         return
@@ -208,7 +203,7 @@ def op_jump(state: State) -> None:
     while index <= len(state.code):
         point = state.code[-index]
 
-        if isinstance(point, Word) and point.name == "Mark":
+        if isinstance(point, Word) and point.name == "r":
             mark_found = True
             break
 
@@ -217,7 +212,7 @@ def op_jump(state: State) -> None:
 
     if not mark_found:
         state.fail_or_thunk(
-            "Jump could not find a matching Mark in the continuation.",
+            "s could not find a matching r in the continuation.",
             stop=True,
         )
         return
@@ -297,7 +292,7 @@ def _run_model_effect(
 
 def evaluate(
     program: Object,
-    dictionary: Optional[Mapping[str, Object]] = None,
+    dictionary: Optional[MutableMapping[str, str]] = None,
     *,
     gas: int = 1_000_000,
     model_backend: Optional[ModelBackend] = None,
@@ -306,22 +301,25 @@ def evaluate(
     verbose: bool = True,
 ) -> Object:
     primitives: dict[str, Primitive] = {
-        "Copy": op_copy,
-        "Drop": op_drop,
-        "Swap": op_swap,
-        "Abs": op_abs,
-        "App": op_app,
-        "Cat": op_cat,
-        "Jump": op_jump,
-        "Mark": op_mark,
+        "a": op_app,
+        "b": op_abs,
+        "c": op_cat,
+        "d": op_copy,
+        "e": op_drop,
+        "f": op_swap,
+        "r": op_mark,
+        "s": op_jump,
     }
+
+    active_dictionary = dictionary if dictionary is not None else {}
+    _validate_dictionary(active_dictionary)
 
     state = State(
         code=[program],
         data=[],
         sink=[],
         gas=gas,
-        dictionary=dictionary or {},
+        dictionary=active_dictionary,
         primitives=primitives,
         model_backend=model_backend,
         strict=strict,
@@ -342,8 +340,13 @@ def evaluate(
             case Word(name):
                 if binding := state.primitives.get(name):
                     binding(state)
-                elif binding := state.dictionary.get(name):
-                    state.code.append(binding)
+                elif name in state.dictionary:
+                    state.code.append(
+                        read(
+                            state.dictionary[name],
+                            source_name=f"<word {name}>",
+                        )
+                    )
                 else:
                     state.fail_or_thunk(
                         f"Undefined word {name!r}.",
@@ -385,7 +388,7 @@ def run(
     *,
     model_backend: Optional[ModelBackend] = None,
     strict: bool = False,
-    dictionary: Optional[Mapping[str, Object]] = None,
+    dictionary: Optional[MutableMapping[str, str]] = None,
     verbose: bool = True,
 ) -> str:
     return str(
