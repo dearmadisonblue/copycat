@@ -175,7 +175,6 @@ def _run_smoke_tests(module: Module) -> None:
             module.parsed(name),
             module=module,
             gas=_SMOKE_TEST_GAS,
-            strict=True,
             verbose=False,
         )
 

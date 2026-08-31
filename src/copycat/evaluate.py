@@ -27,8 +27,6 @@ class State:
     module: Module
     primitives: Mapping[str, Primitive]
     model_backend: Optional[ModelBackend]
-    strict: bool
-    allow_nested_model_calls: bool
     verbose: bool
     hand: Optional[Object] = None
     step: int = 0
@@ -73,13 +71,10 @@ class State:
         self.thunk()
         self.gas = 0
 
-    def fail_or_thunk(self, message: str, *, stop: bool = False) -> None:
+    def residualize(self, message: str, *, stop: bool = False) -> None:
         if self.verbose:
-            action = "error" if self.strict else ("stop" if stop else "residualize")
+            action = "stop" if stop else "residualize"
             print(f"\n[Copycat {action}] {message}")
-
-        if self.strict:
-            raise EvaluationError(message, self.hand)
 
         if stop:
             self.stop()
@@ -92,35 +87,23 @@ def stack_string(data: Sequence[Object]) -> str:
     return str(Cat(tuple(data)))
 
 
-def _contains_model(obj: Object) -> bool:
-    match obj:
-        case Model():
-            return True
-        case Abs(body):
-            return _contains_model(body)
-        case Cat(body):
-            return any(_contains_model(child) for child in body)
-        case _:
-            return False
-
-
 def op_copy(state: State) -> None:
     if not state.data:
-        state.fail_or_thunk("d needs 1 value on the data stack, but the stack is empty.")
+        state.residualize("d needs 1 value on the data stack, but the stack is empty.")
         return
     state.data.append(state.data[-1])
 
 
 def op_drop(state: State) -> None:
     if not state.data:
-        state.fail_or_thunk("e needs 1 value on the data stack, but the stack is empty.")
+        state.residualize("e needs 1 value on the data stack, but the stack is empty.")
         return
     state.data.pop()
 
 
 def op_swap(state: State) -> None:
     if len(state.data) < 2:
-        state.fail_or_thunk(
+        state.residualize(
             f"f needs 2 values on the data stack, but found {len(state.data)}."
         )
         return
@@ -129,14 +112,14 @@ def op_swap(state: State) -> None:
 
 def op_abs(state: State) -> None:
     if not state.data:
-        state.fail_or_thunk("b needs 1 value on the data stack, but the stack is empty.")
+        state.residualize("b needs 1 value on the data stack, but the stack is empty.")
         return
     state.data[-1] = Abs(state.data[-1])
 
 
 def op_app(state: State) -> None:
     if not state.data:
-        state.fail_or_thunk(
+        state.residualize(
             "a needs a quotation on top of the data stack.",
             stop=True,
         )
@@ -145,7 +128,7 @@ def op_app(state: State) -> None:
     block = state.data[-1]
 
     if not isinstance(block, Abs):
-        state.fail_or_thunk(
+        state.residualize(
             f"a expected a quotation on top of the stack, but found {block}.",
             stop=True,
         )
@@ -163,7 +146,7 @@ def _cat_objects(first: Object, second: Object) -> Cat:
 
 def op_cat(state: State) -> None:
     if len(state.data) < 2:
-        state.fail_or_thunk(
+        state.residualize(
             f"c needs 2 quotations on the data stack, but found {len(state.data)}."
         )
         return
@@ -171,7 +154,7 @@ def op_cat(state: State) -> None:
     first, second = state.data[-2], state.data[-1]
 
     if not isinstance(first, Abs) or not isinstance(second, Abs):
-        state.fail_or_thunk(
+        state.residualize(
             f"c expected two quotations, but found {first} and {second}."
         )
         return
@@ -181,7 +164,7 @@ def op_cat(state: State) -> None:
 
 def op_jump(state: State) -> None:
     if not state.data:
-        state.fail_or_thunk(
+        state.residualize(
             "s needs a handler quotation on top of the data stack.",
             stop=True,
         )
@@ -190,7 +173,7 @@ def op_jump(state: State) -> None:
     handler = state.data[-1]
 
     if not isinstance(handler, Abs):
-        state.fail_or_thunk(
+        state.residualize(
             f"s expected a handler quotation, but found {handler}.",
             stop=True,
         )
@@ -211,7 +194,7 @@ def op_jump(state: State) -> None:
         index += 1
 
     if not mark_found:
-        state.fail_or_thunk(
+        state.residualize(
             "s could not find a matching r in the continuation.",
             stop=True,
         )
@@ -281,16 +264,6 @@ def _run_model_effect(
             exc,
         ) from exc
 
-    if not state.allow_nested_model_calls and _contains_model(generated):
-        raise GeneratedCodeError(
-            prompt,
-            reply.code,
-            EvaluationError(
-                "Generated code contains another model invocation, "
-                "but nested model calls are disabled."
-            ),
-        )
-
     state.code.append(generated)
 
 
@@ -300,8 +273,6 @@ def evaluate(
     *,
     gas: int = 1_000_000,
     model_backend: Optional[ModelBackend] = None,
-    strict: bool = False,
-    allow_nested_model_calls: bool = False,
     verbose: bool = True,
 ) -> Object:
     primitives: dict[str, Primitive] = {
@@ -327,8 +298,6 @@ def evaluate(
         module=active_module,
         primitives=primitives,
         model_backend=model_backend,
-        strict=strict,
-        allow_nested_model_calls=allow_nested_model_calls,
         verbose=verbose,
     )
 
@@ -348,7 +317,7 @@ def evaluate(
                 elif name in state.module:
                     state.code.append(state.module.parsed(name))
                 else:
-                    state.fail_or_thunk(
+                    state.residualize(
                         f"Undefined word {name!r}.",
                         stop=True,
                     )
@@ -384,12 +353,6 @@ def evaluate(
 
         state.trace("after", term)
 
-    if state.gas <= 0 and state.code and state.strict:
-        raise EvaluationError(
-            "Evaluation ran out of gas before the program finished.",
-            state.hand,
-        )
-
     if verbose:
         print("\n=== Evaluation complete ===")
         print(f"Result: {state.value or '(empty)'}")
@@ -400,8 +363,8 @@ def evaluate(
 def run(
     source: str,
     *,
+    gas: int = 1_000_000,
     model_backend: Optional[ModelBackend] = None,
-    strict: bool = False,
     module: Optional[Module] = None,
     verbose: bool = True,
 ) -> str:
@@ -409,8 +372,8 @@ def run(
         evaluate(
             read(source),
             module=module,
+            gas=gas,
             model_backend=model_backend,
-            strict=strict,
             verbose=verbose,
         )
     )

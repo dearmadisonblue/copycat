@@ -57,7 +57,7 @@ annotation asserts that the top two values are deeply equal without removing
 them from the stack.
 
 ```python
-assert run("1 1 @eq", strict=True, verbose=False) == "1 1"
+assert run("1 1 @eq", verbose=False) == "1 1"
 ```
 
 Modules can be serialized as `.module` ZIP archives. Each archive member is
