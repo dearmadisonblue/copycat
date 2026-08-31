@@ -60,7 +60,7 @@ class Annotation(Object):
 
 
 @dataclass(frozen=True)
-class Abs(Object):
+class Abstract(Object):
     body: Object
 
     def __str__(self) -> str:
@@ -68,7 +68,7 @@ class Abs(Object):
 
 
 @dataclass(frozen=True)
-class Cat(Object):
+class Catenate(Object):
     body: tuple[Object, ...]
 
     def __str__(self) -> str:

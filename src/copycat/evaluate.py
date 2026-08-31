@@ -11,7 +11,7 @@ from .error import (
 )
 from .model import ModelBackend, ModelError, parse_model_answer
 from .module import EMPTY_MODULE, Module
-from .object import Abs, Annotation, Cat, Model, Number, Object, String, Word
+from .object import Abstract, Annotation, Catenate, Model, Number, Object, String, Word
 from .read import read
 
 
@@ -33,7 +33,7 @@ class State:
 
     @property
     def value(self) -> Object:
-        return Cat(tuple(self.sink + self.data + list(reversed(self.code))))
+        return Catenate(tuple(self.sink + self.data + list(reversed(self.code))))
 
     @property
     def is_active(self) -> bool:
@@ -49,9 +49,9 @@ class State:
         if not self.verbose:
             return
 
-        sink = str(Cat(tuple(self.sink))) or "(empty)"
-        data = str(Cat(tuple(self.data))) or "(empty)"
-        remaining = str(Cat(tuple(reversed(self.code)))) or "(empty)"
+        sink = str(Catenate(tuple(self.sink))) or "(empty)"
+        data = str(Catenate(tuple(self.data))) or "(empty)"
+        remaining = str(Catenate(tuple(reversed(self.code)))) or "(empty)"
         print(
             f"\n[Copycat step {self.step} — {phase}] "
             f"{type(term).__name__}: {term}"
@@ -84,7 +84,7 @@ class State:
 
 def stack_string(data: Sequence[Object]) -> str:
     """Representation shown to the model, ordered bottom-to-top."""
-    return str(Cat(tuple(data)))
+    return str(Catenate(tuple(data)))
 
 
 def op_copy(state: State) -> None:
@@ -110,11 +110,11 @@ def op_swap(state: State) -> None:
     state.data[-2], state.data[-1] = state.data[-1], state.data[-2]
 
 
-def op_abs(state: State) -> None:
+def op_abstract(state: State) -> None:
     if not state.data:
         state.residualize("b needs 1 value on the data stack, but the stack is empty.")
         return
-    state.data[-1] = Abs(state.data[-1])
+    state.data[-1] = Abstract(state.data[-1])
 
 
 def op_app(state: State) -> None:
@@ -127,7 +127,7 @@ def op_app(state: State) -> None:
 
     block = state.data[-1]
 
-    if not isinstance(block, Abs):
+    if not isinstance(block, Abstract):
         state.residualize(
             f"a expected a quotation on top of the stack, but found {block}.",
             stop=True,
@@ -138,13 +138,13 @@ def op_app(state: State) -> None:
     state.code.append(block.body)
 
 
-def _cat_objects(first: Object, second: Object) -> Cat:
-    first_items = first.body if isinstance(first, Cat) else (first,)
-    second_items = second.body if isinstance(second, Cat) else (second,)
-    return Cat(tuple(first_items) + tuple(second_items))
+def _catenate_objects(first: Object, second: Object) -> Catenate:
+    first_items = first.body if isinstance(first, Catenate) else (first,)
+    second_items = second.body if isinstance(second, Catenate) else (second,)
+    return Catenate(tuple(first_items) + tuple(second_items))
 
 
-def op_cat(state: State) -> None:
+def op_catenate(state: State) -> None:
     if len(state.data) < 2:
         state.residualize(
             f"c needs 2 quotations on the data stack, but found {len(state.data)}."
@@ -153,13 +153,13 @@ def op_cat(state: State) -> None:
 
     first, second = state.data[-2], state.data[-1]
 
-    if not isinstance(first, Abs) or not isinstance(second, Abs):
+    if not isinstance(first, Abstract) or not isinstance(second, Abstract):
         state.residualize(
             f"c expected two quotations, but found {first} and {second}."
         )
         return
 
-    state.data[-2:] = [Abs(_cat_objects(first.body, second.body))]
+    state.data[-2:] = [Abstract(_catenate_objects(first.body, second.body))]
 
 
 def op_jump(state: State) -> None:
@@ -172,7 +172,7 @@ def op_jump(state: State) -> None:
 
     handler = state.data[-1]
 
-    if not isinstance(handler, Abs):
+    if not isinstance(handler, Abstract):
         state.residualize(
             f"s expected a handler quotation, but found {handler}.",
             stop=True,
@@ -200,7 +200,7 @@ def op_jump(state: State) -> None:
         )
         return
 
-    continuation = Abs(Cat(tuple(buffer)))
+    continuation = Abstract(Catenate(tuple(buffer)))
     state.code = state.code[:-index]
     state.data.pop()
     state.data.append(continuation)
@@ -277,8 +277,8 @@ def evaluate(
 ) -> Object:
     primitives: dict[str, Primitive] = {
         "a": op_app,
-        "b": op_abs,
-        "c": op_cat,
+        "b": op_abstract,
+        "c": op_catenate,
         "d": op_copy,
         "e": op_drop,
         "f": op_swap,
@@ -336,10 +336,10 @@ def evaluate(
                             term,
                         )
 
-            case Abs(_) | Number(_) | String(_):
+            case Abstract(_) | Number(_) | String(_):
                 state.data.append(term)
 
-            case Cat(body):
+            case Catenate(body):
                 state.code.extend(reversed(body))
 
             case Model(prompt):

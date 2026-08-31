@@ -7,7 +7,7 @@ from lark import Lark, Transformer
 from lark.exceptions import UnexpectedCharacters, UnexpectedInput, UnexpectedToken
 
 from .error import ParseError
-from .object import Abs, Annotation, Cat, Model, Number, Span, String, Word
+from .object import Abstract, Annotation, Catenate, Model, Number, Span, String, Word
 
 
 # Single-letter names are reserved for the kernel primitives. User-defined words
@@ -77,10 +77,10 @@ class _BuildAST(Transformer):
         return Model(text[1:-1], span=self._span(token))
 
     def quotation(self, children):
-        return Abs(Cat(tuple(children)))
+        return Abstract(Catenate(tuple(children)))
 
     def start(self, children):
-        return Cat(tuple(children))
+        return Catenate(tuple(children))
 
 
 def _eof_location(source: str) -> tuple[int, int]:
@@ -171,7 +171,7 @@ def _friendly_parse_error(
     )
 
 
-def read(code: str, *, source_name: str = "<input>") -> Cat:
+def read(code: str, *, source_name: str = "<input>") -> Catenate:
     """Parse Copycat source into an AST."""
     try:
         tree = _PARSER.parse(code)
