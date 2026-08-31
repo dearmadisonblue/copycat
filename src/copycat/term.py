@@ -52,7 +52,7 @@ class Word(Term):
 
 
 @dataclass(frozen=True)
-class Annotation(Term):
+class Annotate(Term):
     name: str
 
     def __str__(self) -> str:
@@ -92,7 +92,7 @@ class Number(Term):
 
 
 @dataclass(frozen=True)
-class Model(Term):
+class Latent(Term):
     prompt: str
 
     def __str__(self) -> str:

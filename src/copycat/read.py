@@ -7,7 +7,7 @@ from lark import Lark, Transformer
 from lark.exceptions import UnexpectedCharacters, UnexpectedInput, UnexpectedToken
 
 from .error import ParseError
-from .term import Annotation, Model, Number, Quote, Sequence, Span, String, Word
+from .term import Annotate, Latent, Number, Quote, Sequence, Span, String, Word
 
 
 # Single-letter names are reserved for the kernel primitives. User-defined words
@@ -61,7 +61,7 @@ class _BuildAST(Transformer):
 
     def annotation(self, children):
         (token,) = children
-        return Annotation(str(token)[1:], span=self._span(token))
+        return Annotate(str(token)[1:], span=self._span(token))
 
     def number(self, children):
         (token,) = children
@@ -74,7 +74,7 @@ class _BuildAST(Transformer):
     def model(self, children):
         (token,) = children
         text = str(token)
-        return Model(text[1:-1], span=self._span(token))
+        return Latent(text[1:-1], span=self._span(token))
 
     def quotation(self, children):
         return Quote(Sequence(tuple(children)))

@@ -12,7 +12,7 @@ from .error import (
 from .model import ModelBackend, ModelError, parse_model_answer
 from .module import EMPTY_MODULE, Module
 from .read import read
-from .term import Annotation, Model, Number, Quote, Sequence, String, Term, Word
+from .term import Annotate, Latent, Number, Quote, Sequence, String, Term, Word
 
 
 Primitive = Callable[["State"], None]
@@ -213,7 +213,7 @@ def op_mark(state: State) -> None:
 
 def _run_model_effect(
     state: State,
-    term: Model,
+    term: Latent,
     prompt: str,
 ) -> None:
     if state.model_backend is None:
@@ -322,7 +322,7 @@ def evaluate(
                         stop=True,
                     )
 
-            case Annotation(name):
+            case Annotate(name):
                 if name == "eq":
                     if len(state.data) < 2:
                         raise EvaluationError(
@@ -342,7 +342,7 @@ def evaluate(
             case Sequence(body):
                 state.code.extend(reversed(body))
 
-            case Model(prompt):
+            case Latent(prompt):
                 _run_model_effect(state, term, prompt)
 
             case _:

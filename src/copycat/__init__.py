@@ -18,15 +18,15 @@ from .model import (
 )
 from .module import Module, ModuleDocumentationWarning
 from .read import read
-from .term import Annotation, Model, Number, Quote, Sequence, Span, String, Term, Word
+from .term import Annotate, Latent, Number, Quote, Sequence, Span, String, Term, Word
 
 __all__ = [
-    "Annotation",
+    "Annotate",
     "CopycatError",
     "EvaluationError",
     "Gemma4Backend",
     "GeneratedCodeError",
-    "Model",
+    "Latent",
     "ModelBackend",
     "ModelError",
     "ModelOK",
