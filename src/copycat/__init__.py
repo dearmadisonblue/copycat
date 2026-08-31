@@ -16,7 +16,7 @@ from .model import (
     StubModel,
     parse_model_answer,
 )
-from .module import Module, ModuleDocumentationWarning, load_module, save_module
+from .module import Module, ModuleDocumentationWarning
 from .object import Abstract, Annotation, Catenate, Model, Number, Object, Span, String, Word
 from .read import read
 
@@ -45,9 +45,7 @@ __all__ = [
     "StubModel",
     "Word",
     "evaluate",
-    "load_module",
     "parse_model_answer",
     "read",
     "run",
-    "save_module",
 ]

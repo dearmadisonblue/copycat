@@ -232,7 +232,7 @@ def _run_model_effect(
     turn = state.model_backend.generate(
         prompt=prompt,
         stack=visible_stack,
-        module_catalog=state.module.model_catalog,
+        module_catalog=str(state.module),
     )
 
     if state.verbose and turn.prompt_tokens is not None:

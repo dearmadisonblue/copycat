@@ -66,10 +66,10 @@ contents are its Copycat source body. Every `test-*` word is run automatically
 when a module is loaded; a failed assertion prevents the module from loading.
 
 ```python
-from copycat import load_module, save_module
+from copycat import Module
 
-save_module(module, "example.module")
-module = load_module("example.module")
+module.save("example.module")
+module = Module.load("example.module")
 ```
 
 The repository includes `modules/data.module`, a documented and smoke-tested

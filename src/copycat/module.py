@@ -13,8 +13,6 @@ from .read import _is_user_word_name, read
 __all__ = [
     "Module",
     "ModuleDocumentationWarning",
-    "load_module",
-    "save_module",
 ]
 
 _Path = str | PathLike[str]
@@ -54,7 +52,7 @@ def _documentation_text(program: Catenate) -> str | None:
     return None
 
 
-def _format_model_catalog(
+def _format_catalog(
     ordinary_words: list[str],
     documentation: Mapping[str, str],
 ) -> str:
@@ -69,9 +67,9 @@ def _format_model_catalog(
 
 
 class Module(Mapping[str, str]):
-    """An immutable module with cached syntax and model-facing documentation."""
+    """An immutable module with cached syntax and documentation."""
 
-    __slots__ = ("_documentation", "_model_catalog", "_parsed", "_sources")
+    __slots__ = ("_catalog", "_documentation", "_parsed", "_sources")
 
     def __setattr__(self, name: str, value: object) -> None:
         if hasattr(self, name):
@@ -132,7 +130,7 @@ class Module(Mapping[str, str]):
         self._sources = MappingProxyType(copied_sources)
         self._parsed = MappingProxyType(parsed)
         self._documentation = MappingProxyType(documentation)
-        self._model_catalog = _format_model_catalog(ordinary_words, documentation)
+        self._catalog = _format_catalog(ordinary_words, documentation)
 
         _run_smoke_tests(self)
 
@@ -148,10 +146,8 @@ class Module(Mapping[str, str]):
     def __repr__(self) -> str:
         return f"Module({dict(self._sources)!r})"
 
-    @property
-    def model_catalog(self) -> str:
-        """The cached documentation-only catalog supplied to model backends."""
-        return self._model_catalog
+    def __str__(self) -> str:
+        return self._catalog
 
     def parsed(self, name: str) -> Catenate:
         """Return the cached syntax object for a module word."""
@@ -160,6 +156,39 @@ class Module(Mapping[str, str]):
     def documentation(self, name: str) -> str | None:
         """Return decoded documentation for a word, when available."""
         return self._documentation.get(name)
+
+    @staticmethod
+    def load(path: _Path) -> Module:
+        """Load, cache, document-check, and smoke-test a .module ZIP archive."""
+        sources: dict[str, str] = {}
+
+        with ZipFile(path, "r") as archive:
+            for info in archive.infolist():
+                name = info.filename
+                if info.is_dir() or "/" in name or "\\" in name:
+                    raise ValueError(
+                        f"Invalid module entry {name!r}. "
+                        "Module entries must be flat files."
+                    )
+                if name in sources:
+                    raise ValueError(f"Duplicate module entry {name!r}.")
+
+                try:
+                    source = archive.read(info).decode("utf-8")
+                except UnicodeDecodeError as exc:
+                    raise ValueError(
+                        f"Module entry {name!r} is not valid UTF-8 source text."
+                    ) from exc
+
+                sources[name] = source
+
+        return Module(sources)
+
+    def save(self, path: _Path) -> None:
+        """Serialize this module as a ZIP archive of extensionless sources."""
+        with ZipFile(path, "w", compression=ZIP_DEFLATED) as archive:
+            for name in sorted(self):
+                archive.writestr(name, self[name].encode("utf-8"))
 
 
 def _run_smoke_tests(module: Module) -> None:
@@ -180,39 +209,3 @@ def _run_smoke_tests(module: Module) -> None:
 
 
 EMPTY_MODULE = Module()
-
-
-def load_module(path: _Path) -> Module:
-    """Load, cache, document-check, and smoke-test a .module ZIP archive."""
-    sources: dict[str, str] = {}
-
-    with ZipFile(path, "r") as archive:
-        for info in archive.infolist():
-            name = info.filename
-            if info.is_dir() or "/" in name or "\\" in name:
-                raise ValueError(
-                    f"Invalid module entry {name!r}. Module entries must be flat files."
-                )
-            if name in sources:
-                raise ValueError(f"Duplicate module entry {name!r}.")
-
-            try:
-                source = archive.read(info).decode("utf-8")
-            except UnicodeDecodeError as exc:
-                raise ValueError(
-                    f"Module entry {name!r} is not valid UTF-8 source text."
-                ) from exc
-
-            sources[name] = source
-
-    return Module(sources)
-
-
-def save_module(module: Module, path: _Path) -> None:
-    """Serialize an immutable module as a ZIP archive of extensionless sources."""
-    if not isinstance(module, Module):
-        raise TypeError("save_module expects a Module instance.")
-
-    with ZipFile(path, "w", compression=ZIP_DEFLATED) as archive:
-        for name in sorted(module):
-            archive.writestr(name, module[name].encode("utf-8"))
