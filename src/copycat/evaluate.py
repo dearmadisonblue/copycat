@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, Mapping, Optional, Sequence
+from typing import Callable, Mapping, Optional
 
 from .error import (
     CopycatError,
@@ -11,8 +11,8 @@ from .error import (
 )
 from .model import ModelBackend, ModelError, parse_model_answer
 from .module import EMPTY_MODULE, Module
-from .object import Abstract, Annotation, Catenate, Model, Number, Object, String, Word
 from .read import read
+from .term import Annotation, Model, Number, Quote, Sequence, String, Term, Word
 
 
 Primitive = Callable[["State"], None]
@@ -21,37 +21,37 @@ Primitive = Callable[["State"], None]
 @dataclass
 class State:
     gas: int
-    code: list[Object]
-    data: list[Object]
-    sink: list[Object]
+    code: list[Term]
+    data: list[Term]
+    sink: list[Term]
     module: Module
     primitives: Mapping[str, Primitive]
     model_backend: Optional[ModelBackend]
     verbose: bool
-    hand: Optional[Object] = None
+    hand: Optional[Term] = None
     step: int = 0
 
     @property
-    def value(self) -> Object:
-        return Catenate(tuple(self.sink + self.data + list(reversed(self.code))))
+    def value(self) -> Term:
+        return Sequence(tuple(self.sink + self.data + list(reversed(self.code))))
 
     @property
     def is_active(self) -> bool:
         return self.gas > 0 and bool(self.code)
 
-    def tick(self) -> Object:
+    def tick(self) -> Term:
         self.gas -= 1
         self.step += 1
         self.hand = self.code.pop()
         return self.hand
 
-    def trace(self, phase: str, term: Object) -> None:
+    def trace(self, phase: str, term: Term) -> None:
         if not self.verbose:
             return
 
-        sink = str(Catenate(tuple(self.sink))) or "(empty)"
-        data = str(Catenate(tuple(self.data))) or "(empty)"
-        remaining = str(Catenate(tuple(reversed(self.code)))) or "(empty)"
+        sink = str(Sequence(tuple(self.sink))) or "(empty)"
+        data = str(Sequence(tuple(self.data))) or "(empty)"
+        remaining = str(Sequence(tuple(reversed(self.code)))) or "(empty)"
         print(
             f"\n[Copycat step {self.step} — {phase}] "
             f"{type(term).__name__}: {term}"
@@ -82,9 +82,9 @@ class State:
             self.thunk()
 
 
-def stack_string(data: Sequence[Object]) -> str:
+def stack_string(data: list[Term]) -> str:
     """Representation shown to the model, ordered bottom-to-top."""
-    return str(Catenate(tuple(data)))
+    return str(Sequence(tuple(data)))
 
 
 def op_copy(state: State) -> None:
@@ -114,7 +114,7 @@ def op_abstract(state: State) -> None:
     if not state.data:
         state.residualize("b needs 1 value on the data stack, but the stack is empty.")
         return
-    state.data[-1] = Abstract(state.data[-1])
+    state.data[-1] = Quote(state.data[-1])
 
 
 def op_app(state: State) -> None:
@@ -127,7 +127,7 @@ def op_app(state: State) -> None:
 
     block = state.data[-1]
 
-    if not isinstance(block, Abstract):
+    if not isinstance(block, Quote):
         state.residualize(
             f"a expected a quotation on top of the stack, but found {block}.",
             stop=True,
@@ -138,10 +138,10 @@ def op_app(state: State) -> None:
     state.code.append(block.body)
 
 
-def _catenate_objects(first: Object, second: Object) -> Catenate:
-    first_items = first.body if isinstance(first, Catenate) else (first,)
-    second_items = second.body if isinstance(second, Catenate) else (second,)
-    return Catenate(tuple(first_items) + tuple(second_items))
+def _catenate_objects(first: Term, second: Term) -> Sequence:
+    first_items = first.body if isinstance(first, Sequence) else (first,)
+    second_items = second.body if isinstance(second, Sequence) else (second,)
+    return Sequence(tuple(first_items) + tuple(second_items))
 
 
 def op_catenate(state: State) -> None:
@@ -153,13 +153,13 @@ def op_catenate(state: State) -> None:
 
     first, second = state.data[-2], state.data[-1]
 
-    if not isinstance(first, Abstract) or not isinstance(second, Abstract):
+    if not isinstance(first, Quote) or not isinstance(second, Quote):
         state.residualize(
             f"c expected two quotations, but found {first} and {second}."
         )
         return
 
-    state.data[-2:] = [Abstract(_catenate_objects(first.body, second.body))]
+    state.data[-2:] = [Quote(_catenate_objects(first.body, second.body))]
 
 
 def op_jump(state: State) -> None:
@@ -172,14 +172,14 @@ def op_jump(state: State) -> None:
 
     handler = state.data[-1]
 
-    if not isinstance(handler, Abstract):
+    if not isinstance(handler, Quote):
         state.residualize(
             f"s expected a handler quotation, but found {handler}.",
             stop=True,
         )
         return
 
-    buffer: list[Object] = []
+    buffer: list[Term] = []
     index = 1
     mark_found = False
 
@@ -200,7 +200,7 @@ def op_jump(state: State) -> None:
         )
         return
 
-    continuation = Abstract(Catenate(tuple(buffer)))
+    continuation = Quote(Sequence(tuple(buffer)))
     state.code = state.code[:-index]
     state.data.pop()
     state.data.append(continuation)
@@ -268,13 +268,13 @@ def _run_model_effect(
 
 
 def evaluate(
-    program: Object,
+    program: Term,
     module: Optional[Module] = None,
     *,
     gas: int = 1_000_000,
     model_backend: Optional[ModelBackend] = None,
     verbose: bool = True,
-) -> Object:
+) -> Term:
     primitives: dict[str, Primitive] = {
         "a": op_app,
         "b": op_abstract,
@@ -336,10 +336,10 @@ def evaluate(
                             term,
                         )
 
-            case Abstract(_) | Number(_) | String(_):
+            case Quote(_) | Number(_) | String(_):
                 state.data.append(term)
 
-            case Catenate(body):
+            case Sequence(body):
                 state.code.extend(reversed(body))
 
             case Model(prompt):

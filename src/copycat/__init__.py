@@ -17,13 +17,11 @@ from .model import (
     parse_model_answer,
 )
 from .module import Module, ModuleDocumentationWarning
-from .object import Abstract, Annotation, Catenate, Model, Number, Object, Span, String, Word
 from .read import read
+from .term import Annotation, Model, Number, Quote, Sequence, Span, String, Term, Word
 
 __all__ = [
-    "Abstract",
     "Annotation",
-    "Catenate",
     "CopycatError",
     "EvaluationError",
     "Gemma4Backend",
@@ -38,11 +36,13 @@ __all__ = [
     "Module",
     "ModuleDocumentationWarning",
     "Number",
-    "Object",
     "ParseError",
+    "Quote",
+    "Sequence",
     "Span",
     "String",
     "StubModel",
+    "Term",
     "Word",
     "evaluate",
     "parse_model_answer",

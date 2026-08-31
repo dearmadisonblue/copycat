@@ -6,7 +6,7 @@ from os import PathLike
 from types import MappingProxyType
 from zipfile import ZIP_DEFLATED, ZipFile
 
-from .object import Catenate, String
+from .term import Sequence, String
 from .read import _is_user_word_name, read
 
 
@@ -46,7 +46,7 @@ def _validate_sources(sources: Mapping[str, str]) -> None:
             raise TypeError(f"Module body for {name!r} must be source text.")
 
 
-def _documentation_text(program: Catenate) -> str | None:
+def _documentation_text(program: Sequence) -> str | None:
     if len(program.body) == 1 and isinstance(program.body[0], String):
         return program.body[0].value
     return None
@@ -149,7 +149,7 @@ class Module(Mapping[str, str]):
     def __str__(self) -> str:
         return self._catalog
 
-    def parsed(self, name: str) -> Catenate:
+    def parsed(self, name: str) -> Sequence:
         """Return the cached syntax object for a module word."""
         return self._parsed[name]
 

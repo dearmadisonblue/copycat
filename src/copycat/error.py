@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional
 
-from .object import Object
+from .term import Term
 
 
 class CopycatError(Exception):
@@ -40,7 +40,7 @@ class ParseError(CopycatError):
 @dataclass
 class EvaluationError(CopycatError):
     message: str
-    operation: Optional[Object] = None
+    operation: Optional[Term] = None
 
     def __str__(self) -> str:
         if self.operation is None or self.operation.span is None:

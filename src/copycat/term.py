@@ -39,12 +39,12 @@ class Span:
 
 
 @dataclass(frozen=True, kw_only=True)
-class Object:
+class Term:
     span: Optional[Span] = field(default=None, compare=False, repr=False)
 
 
 @dataclass(frozen=True)
-class Word(Object):
+class Word(Term):
     name: str
 
     def __str__(self) -> str:
@@ -52,7 +52,7 @@ class Word(Object):
 
 
 @dataclass(frozen=True)
-class Annotation(Object):
+class Annotation(Term):
     name: str
 
     def __str__(self) -> str:
@@ -60,23 +60,23 @@ class Annotation(Object):
 
 
 @dataclass(frozen=True)
-class Abstract(Object):
-    body: Object
+class Quote(Term):
+    body: Term
 
     def __str__(self) -> str:
         return f"[{self.body}]"
 
 
 @dataclass(frozen=True)
-class Catenate(Object):
-    body: tuple[Object, ...]
+class Sequence(Term):
+    body: tuple[Term, ...]
 
     def __str__(self) -> str:
         return " ".join(str(child) for child in self.body)
 
 
 @dataclass(frozen=True)
-class String(Object):
+class String(Term):
     value: str
 
     def __str__(self) -> str:
@@ -84,7 +84,7 @@ class String(Object):
 
 
 @dataclass(frozen=True)
-class Number(Object):
+class Number(Term):
     value: int
 
     def __str__(self) -> str:
@@ -92,7 +92,7 @@ class Number(Object):
 
 
 @dataclass(frozen=True)
-class Model(Object):
+class Model(Term):
     prompt: str
 
     def __str__(self) -> str:
