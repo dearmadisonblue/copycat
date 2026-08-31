@@ -10,7 +10,7 @@ from .error import (
     ModelReportedError,
 )
 from .model import ModelBackend, ModelError, parse_model_answer
-from .module import EMPTY_MODULE, Module
+from .module import Module
 from .read import read
 from .term import Annotate, Latent, Number, Quote, Sequence, String, Term, Word
 
@@ -286,7 +286,7 @@ def evaluate(
         "s": op_jump,
     }
 
-    active_module = module if module is not None else EMPTY_MODULE
+    active_module = module if module is not None else Module()
     if not isinstance(active_module, Module):
         raise TypeError("evaluate expects module to be a Module instance.")
 

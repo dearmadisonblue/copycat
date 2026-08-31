@@ -27,10 +27,10 @@ from copycat import run
 assert run("1 2 f", verbose=False) == "2 1"
 ```
 
-Copycat modules are immutable mappings from lowercase word names to source text.
-Their source is parsed and cached when the module is constructed. User-defined
-names must be longer than one character; single-letter names are reserved for
-the kernel primitives `a`-`f`, `r`, and `s`.
+Copycat modules are mutable mappings from lowercase word names to source text.
+Source is parsed and cached when it is added or changed. User-defined names must
+be longer than one character; single-letter names are reserved for the kernel
+primitives `a`-`f`, `r`, and `s`.
 
 ```python
 from copycat import Module
@@ -44,7 +44,14 @@ module = Module({
 })
 
 assert run("1 duplicate", module=module, verbose=False) == "1 1"
+
+module["duplicate"] = "d d"
+assert run("1 duplicate", module=module, verbose=False) == "1 1 1"
 ```
+
+Assignments, deletions, and batch updates refresh the affected documentation and
+the model catalog, then run the module's smoke tests. A failed mutation leaves the
+module unchanged.
 
 Documentation uses the conventional `-doc` suffix. A documentation word must
 contain exactly one string. Missing or unusable documentation produces a warning
