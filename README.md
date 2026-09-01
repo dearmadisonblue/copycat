@@ -22,9 +22,22 @@ python -m pip install -e ".[gemma,test]"
 ## Usage
 
 ```python
-from copycat import run
+from copycat import normalize
 
-assert run("1 2 f", verbose=False) == "2 1"
+assert normalize("1 2 f", verbose=False) == "2 1"
+```
+
+Use `Evaluate` when evaluation needs to be inspected or advanced one machine
+transition at a time:
+
+```python
+from copycat import Evaluate, read
+
+evaluation = Evaluate(read("1 2 f"), verbose=False)
+snapshot = evaluation.step()
+
+assert snapshot.steps == 1
+assert str(evaluation.run()) == "2 1"
 ```
 
 Copycat modules are mutable mappings from lowercase word names to source text.
@@ -43,10 +56,10 @@ module = Module({
     ),
 })
 
-assert run("1 duplicate", module=module, verbose=False) == "1 1"
+assert normalize("1 duplicate", module=module, verbose=False) == "1 1"
 
 module["duplicate"] = "d d"
-assert run("1 duplicate", module=module, verbose=False) == "1 1 1"
+assert normalize("1 duplicate", module=module, verbose=False) == "1 1 1"
 ```
 
 Assignments, deletions, and batch updates refresh the affected documentation and
@@ -64,7 +77,7 @@ annotation asserts that the top two values are deeply equal without removing
 them from the stack.
 
 ```python
-assert run("1 1 @eq", verbose=False) == "1 1"
+assert normalize("1 1 @eq", verbose=False) == "1 1"
 ```
 
 Modules can be serialized as `.module` ZIP archives. Each archive member is

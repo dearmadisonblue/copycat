@@ -6,7 +6,7 @@ from .error import (
     ModelReportedError,
     ParseError,
 )
-from .evaluate import evaluate, run
+from .evaluate import Evaluate, EvaluationSnapshot, evaluate, normalize
 from .model import (
     Gemma4Backend,
     ModelBackend,
@@ -24,6 +24,8 @@ __all__ = [
     "Annotate",
     "CopycatError",
     "EvaluationError",
+    "EvaluationSnapshot",
+    "Evaluate",
     "Gemma4Backend",
     "GeneratedCodeError",
     "Latent",
@@ -45,7 +47,7 @@ __all__ = [
     "Term",
     "Word",
     "evaluate",
+    "normalize",
     "parse_model_answer",
     "read",
-    "run",
 ]
