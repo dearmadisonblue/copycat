@@ -1,0 +1,1 @@
+"not (boolean -- boolean): Negate a Boolean value. Example: true not [1] [2] if ==> 2."

@@ -1,0 +1,1 @@
+"option-case (option none-case some-case -- ...): Eliminate an option. Execute none-case for none or some-case with the contained value available. Example: 7 some [0] [] option-case ==> 7."

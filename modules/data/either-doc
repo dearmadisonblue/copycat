@@ -1,0 +1,1 @@
+"either (sum left-case right-case -- ...): Eliminate a sum. Execute left-case for left and right-case for right; the selected quotation receives the payload. Example: 7 left [e 1] [e 2] either ==> 1."

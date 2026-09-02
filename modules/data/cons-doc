@@ -1,0 +1,1 @@
+"cons (tail head -- list): Prepend a head value to a Scott-encoded tail list. Example: nil 7 cons head [0] [] option-case ==> 7."

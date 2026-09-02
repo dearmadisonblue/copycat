@@ -1,0 +1,1 @@
+"dip (x quotation -- ... x): Execute the quotation while temporarily hiding x, then restore x on top. Example: 1 [2] dip ==> 2 1."

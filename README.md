@@ -80,24 +80,34 @@ them from the stack.
 assert normalize("1 1 @eq", verbose=False) == "1 1"
 ```
 
-Modules can be serialized as `.module` ZIP archives. Each archive member is
-an extensionless UTF-8 text file whose filename is the word name and whose
-contents are its Copycat source body. Every `test-*` word is run automatically
-when a module is loaded; a failed assertion prevents the module from loading.
+Modules are stored as directories of extensionless UTF-8 text files. Each
+filename is a word name and its contents are the Copycat source body. Saving
+synchronizes the directory with the module, removing files for deleted words.
+ZIP archives containing the same flat file layout can also be loaded as a
+portable transport format. Every `test-*` word is run automatically when a
+module is loaded; a failed assertion prevents the module from loading.
 
 ```python
 from copycat import Module
 
-module.save("example.module")
-module = Module.load("example.module")
+module.save("example")
+module = Module.load("example")
+module = Module.load("example.zip")
 ```
 
-The repository includes `modules/data.module`, a documented and smoke-tested
-module of products, sums, options, booleans, and Scott-encoded lists. In Colab
-or another remote environment it can be fetched directly from:
+The repository includes `modules/data`, a documented and smoke-tested module
+of products, sums, options, booleans, and Scott-encoded lists. Clone the
+repository to install the package and load the module from the same revision:
 
-```text
-https://raw.githubusercontent.com/dearmadisonblue/copycat/main/modules/data.module
+```bash
+git clone https://github.com/dearmadisonblue/copycat.git
+python -m pip install -e copycat
+```
+
+```python
+from copycat import Module
+
+data_module = Module.load("copycat/modules/data")
 ```
 
 See [`notebooks/copycat.ipynb`](notebooks/copycat.ipynb) for reader, evaluator,

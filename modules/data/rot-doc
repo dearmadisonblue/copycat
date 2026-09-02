@@ -1,0 +1,1 @@
+"rot (x y z -- y z x): Rotate the top three values, moving the third-from-top value to the top. Example: 1 2 3 rot ==> 2 3 1."

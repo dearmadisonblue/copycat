@@ -1,0 +1,1 @@
+"true (-- boolean): Push the true Boolean value. It selects the first quotation given to if. Example: true [1] [2] if ==> 1."

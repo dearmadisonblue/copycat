@@ -1,0 +1,1 @@
+"uncons (list -- option): Return none for nil or some containing a pair of the tail and head of a nonempty list. Example: 7 singleton uncons [0] [second] option-case ==> 7."

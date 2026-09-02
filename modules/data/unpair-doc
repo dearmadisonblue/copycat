@@ -1,0 +1,1 @@
+"unpair (pair -- first second): Deconstruct a pair and leave both components on the stack. Example: 1 2 pair unpair ==> 1 2."

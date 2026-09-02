@@ -1,0 +1,1 @@
+"list-empty (list -- boolean): Return true for nil and false for a nonempty list. Example: nil list-empty [1] [2] if ==> 1."

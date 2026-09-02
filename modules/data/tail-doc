@@ -1,0 +1,1 @@
+"tail (list -- option): Return none for nil or some containing the tail of a nonempty list. Example: 7 singleton tail [false] [list-empty] option-case [1] [2] if ==> 1."

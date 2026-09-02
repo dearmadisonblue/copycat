@@ -1,0 +1,1 @@
+"singleton (value -- list): Construct a one-element Scott-encoded list. Example: 7 singleton head [0] [] option-case ==> 7."

@@ -1,0 +1,1 @@
+"and (p q -- boolean): Compute Boolean conjunction. Example: true false and [1] [2] if ==> 2."

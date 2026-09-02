@@ -3,7 +3,8 @@ from __future__ import annotations
 import warnings
 from collections.abc import Iterator, Mapping, MutableMapping
 from os import PathLike
-from zipfile import ZIP_DEFLATED, ZipFile
+from pathlib import Path
+from zipfile import ZipFile, is_zipfile
 
 from .term import Sequence, String
 from .read import _is_user_word_name, read
@@ -75,6 +76,52 @@ def _is_ordinary_word(name: str) -> bool:
 
 def _ordinary_words(sources: Mapping[str, str]) -> list[str]:
     return sorted(name for name in sources if _is_ordinary_word(name))
+
+
+def _load_directory(path: Path) -> dict[str, str]:
+    sources: dict[str, str] = {}
+
+    for entry in sorted(path.iterdir(), key=lambda entry: entry.name):
+        if entry.is_symlink() or not entry.is_file():
+            raise ValueError(
+                f"Invalid module entry {entry.name!r}. "
+                "Module directories must contain only flat files."
+            )
+
+        try:
+            sources[entry.name] = entry.read_text(encoding="utf-8")
+        except UnicodeDecodeError as exc:
+            raise ValueError(
+                f"Module entry {entry.name!r} is not valid UTF-8 source text."
+            ) from exc
+
+    return sources
+
+
+def _load_zip(path: Path) -> dict[str, str]:
+    sources: dict[str, str] = {}
+
+    with ZipFile(path, "r") as archive:
+        for info in archive.infolist():
+            name = info.filename
+            if info.is_dir() or "/" in name or "\\" in name:
+                raise ValueError(
+                    f"Invalid module entry {name!r}. "
+                    "Module archives must contain only flat files."
+                )
+            if name in sources:
+                raise ValueError(f"Duplicate module entry {name!r}.")
+
+            try:
+                source = archive.read(info).decode("utf-8")
+            except UnicodeDecodeError as exc:
+                raise ValueError(
+                    f"Module entry {name!r} is not valid UTF-8 source text."
+                ) from exc
+
+            sources[name] = source
+
+    return sources
 
 
 def _refresh_word_documentation(
@@ -331,36 +378,56 @@ class Module(MutableMapping[str, str]):
 
     @staticmethod
     def load(path: _Path) -> Module:
-        """Load, cache, document-check, and smoke-test a .module ZIP archive."""
-        sources: dict[str, str] = {}
+        """Load, validate, cache, and smoke-test a directory or ZIP module."""
+        module_path = Path(path)
 
-        with ZipFile(path, "r") as archive:
-            for info in archive.infolist():
-                name = info.filename
-                if info.is_dir() or "/" in name or "\\" in name:
-                    raise ValueError(
-                        f"Invalid module entry {name!r}. "
-                        "Module entries must be flat files."
-                    )
-                if name in sources:
-                    raise ValueError(f"Duplicate module entry {name!r}.")
-
-                try:
-                    source = archive.read(info).decode("utf-8")
-                except UnicodeDecodeError as exc:
-                    raise ValueError(
-                        f"Module entry {name!r} is not valid UTF-8 source text."
-                    ) from exc
-
-                sources[name] = source
+        if module_path.is_dir():
+            sources = _load_directory(module_path)
+        elif module_path.is_file() and is_zipfile(module_path):
+            sources = _load_zip(module_path)
+        elif module_path.exists():
+            raise ValueError(
+                f"Module path {str(module_path)!r} must be a directory or ZIP file."
+            )
+        else:
+            raise FileNotFoundError(module_path)
 
         return Module(sources)
 
     def save(self, path: _Path) -> None:
-        """Serialize this module as a ZIP archive of extensionless sources."""
-        with ZipFile(path, "w", compression=ZIP_DEFLATED) as archive:
-            for name in sorted(self):
-                archive.writestr(name, self[name].encode("utf-8"))
+        """Synchronize a directory with this module's extensionless sources."""
+        module_path = Path(path)
+
+        if module_path.exists() and not module_path.is_dir():
+            raise NotADirectoryError(module_path)
+        module_path.mkdir(exist_ok=True)
+
+        existing_names: set[str] = set()
+        for entry in sorted(module_path.iterdir(), key=lambda entry: entry.name):
+            if entry.is_symlink() or not entry.is_file():
+                raise ValueError(
+                    f"Invalid module entry {entry.name!r}. "
+                    "Module directories must contain only flat files."
+                )
+            if not _is_user_word_name(entry.name):
+                raise ValueError(
+                    f"Refusing to replace unexpected file {entry.name!r} "
+                    "in module directory."
+                )
+            existing_names.add(entry.name)
+
+        for name in sorted(self):
+            destination = module_path / name
+            temporary = module_path / f".{name}.tmp"
+            try:
+                temporary.write_text(self[name], encoding="utf-8", newline="")
+                temporary.replace(destination)
+            except BaseException:
+                temporary.unlink(missing_ok=True)
+                raise
+
+        for name in sorted(existing_names - set(self)):
+            (module_path / name).unlink()
 
 
 def _run_smoke_tests(module: Module) -> None:

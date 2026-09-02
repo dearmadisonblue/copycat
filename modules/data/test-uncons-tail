@@ -1,0 +1,1 @@
+nil 7 cons uncons [false] [first list-empty] option-case [1] [2] if 1 @eq

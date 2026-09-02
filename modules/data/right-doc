@@ -1,0 +1,1 @@
+"right (value -- sum): Construct the right alternative of a functionally encoded sum. Example: 7 right [e 1] [e 2] either ==> 2."

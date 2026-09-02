@@ -1,0 +1,1 @@
+"list-case (list nil-case cons-case -- ...): Eliminate a Scott-encoded list. Execute nil-case for nil; for cons, execute cons-case with the tail and head available in that order, leaving the head on top. Example: nil 7 cons [0] [f e] list-case ==> 7."

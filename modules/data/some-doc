@@ -1,0 +1,1 @@
+"some (value -- option): Construct an option containing value. Example: 7 some [0] [] option-case ==> 7."

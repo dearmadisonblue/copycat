@@ -1,0 +1,1 @@
+"or (p q -- boolean): Compute Boolean disjunction. Example: false true or [1] [2] if ==> 1."

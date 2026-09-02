@@ -1,0 +1,1 @@
+"head (list -- option): Return none for nil or some containing the first element of a nonempty list. Example: 7 singleton head [0] [] option-case ==> 7."

@@ -1,0 +1,1 @@
+"first (pair -- first): Return the first component of a pair. Example: 1 2 pair first ==> 1."

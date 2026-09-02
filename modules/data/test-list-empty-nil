@@ -1,0 +1,1 @@
+nil list-empty [1] [2] if 1 @eq
